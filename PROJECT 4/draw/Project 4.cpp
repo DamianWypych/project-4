@@ -5,31 +5,33 @@
 #include "Project 4.h"
 #include <cstdio>
 #include <fstream>
-
-
+#include <vector>
+#include <sstream>
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 
-INT value;
-
 // buttons
 HWND hwndButton;
+std::vector <double> logs;
 
-std::fstream logs("ROBOT.log");
 const double one_degree = 0.017453;
-int length[] = { 140,110 };
-bool token = true;
-Point XOY(800, 400);
 const double pi = 3.141592653589793;
-double cont;
+const int length[] = { 200,180 };
+Point XOY(800, 400);
+RECT robot = { 
+	XOY.X - length[1] - length[0] - radius * 2 ,
+	XOY.Y - length[1] - length[0] - radius * 2 ,
+	XOY.X + length[1] + length[0] + radius * 2 ,
+	XOY.Y + length[1] + length[0] + radius * 2 };
 double alpha =  pi/ 4.;
 double beta = -pi/6.;
 int mode = 0;
-RECT robot = { XOY.X - length[1] - length[0],XOY.Y - length[1] - length[0],XOY.X + length[1] + length[0],XOY.Y + length[1] + length[0] };
-object ball;
+int anim = 0;
+Point end_pos;
+std::vector <object> ball;
 //object ball;
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -41,26 +43,63 @@ INT_PTR CALLBACK	Buttons(HWND, UINT, WPARAM, LPARAM);
 Point get_end_position(Point last_end, double angle ,int arm_number)
 {
 	Point ret;
-	
-			ret.X = last_end.X + length[arm_number]*cos(angle);
-			ret.Y = last_end.Y - length[arm_number]*sin(angle);
+		ret.X = last_end.X + length[arm_number]*cos(angle);
+		ret.Y = last_end.Y - length[arm_number]*sin(angle);
 	return ret;
 }
 
+std::wstring string_wstring(const std::string& s)
+{
+    int len;
+    int slength = (int)s.length() + 1;
+    len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, 0, 0); 
+    wchar_t* buf = new wchar_t[len];
+    MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, buf, len);
+    std::wstring r(buf);
+    delete[] buf;
+    return r;
+}
+std::string conv(int val)
+{
+	std::string buff;
+	int h1;
+	int h2=0;
+	if (val > 9) {
+		h2 = 1;
+		h1 = val % 10;
+		buff.push_back(48 + h1);
+		buff.push_back(48 + h2);
+	}
+	else
+	{
+		h1 = val;
+		buff.push_back(48 + h1);
+	}
+	return buff;
+
+}
+void Show_mass(HDC hdc, int text,int i)
+{
+	std::wstring stemp = string_wstring(conv(text));
+	TextOut(hdc, ball[i].get_ball_loc().X + radius-1, ball[i].get_ball_loc().Y+1, stemp.c_str(), 2);
+}
 Point draw_arm(HDC hdc, double alpha, double beta)
 {
-
 	Graphics graphics(hdc);
 
 	Pen pen(Color(255, 0, 0, 255), 5);
 	Pen red(Color(255, 255, 0, 0), 10);
+
 	Point second;
 	Point end;
+
 	graphics.DrawLine(&pen, XOY, second = get_end_position(XOY, alpha, 0));
 
 	graphics.DrawLine(&pen, second, end = get_end_position(second, beta, 1));
 	graphics.DrawEllipse(&red, second.X - 1, second.Y - 1, 4, 4);
-
+	for (int i = 0; i < ball.size(); i++)
+		if (ball[i].get_egs())
+			ball[i].draw_object(hdc);
 	return end;
 }
 bool animate(HDC hdc, double alpha_d, double beta_d)
@@ -72,7 +111,7 @@ bool animate(HDC hdc, double alpha_d, double beta_d)
 		if (beta < beta_d)beta = beta + one_degree;
 		if (alpha > alpha_d)alpha = alpha - one_degree;
 		if (beta > beta_d)beta = beta - one_degree;
-		draw_arm(hdc, alpha, beta);
+		end_pos = draw_arm(hdc, alpha, beta);
 		return true;
 	}
 	else return false;
@@ -90,8 +129,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 	// TODO: Place code here.
 	MSG msg;
 	HACCEL hAccelTable;
-
-	value = 0;
 
 	GdiplusStartupInput gdiplusStartupInput;
 	ULONG_PTR           gdiplusToken;
@@ -126,8 +163,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 
 	return (int)msg.wParam;
 }
-
-
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -181,8 +216,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle (of exe) in our global variable
 
 					   // main window
-	hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
+	hWnd = CreateWindow(szWindowClass,
+		szTitle,
+		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT, 0,
+		CW_USEDEFAULT, 0,
+		NULL, 
+		NULL, 
+		hInstance,
+		NULL);
 
 	// create button and store the handle                                                       
 	
@@ -215,7 +257,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetModuleHandle(NULL),
 		NULL);
 
-		
 	hwndButton = CreateWindow(TEXT("button"),
 		TEXT("MODE 3"),                  
 		WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
@@ -234,6 +275,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		(HMENU)ID_BUTTON_ANIMATE,
 		hInstance,
 		NULL);
+
 	hwndButton = CreateWindow(TEXT("button"),
 		TEXT("BALL"),
 		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -270,7 +312,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
 	HDC hdc;
-	
+
 	switch (message)
 	{
 	case WM_COMMAND:
@@ -288,8 +330,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DestroyWindow(hWnd);
 			break;
 		case ID_BUTTON_SAVE:
-			logs << alpha << " " << beta << std::endl;
-
+			logs.push_back(alpha);
+			logs.push_back(beta);
 			break;
 		case ID_BUTTON2:
 			mode = 0;
@@ -301,20 +343,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			mode = 2;		
 			break;
 		case ID_BUTTON_ANIMATE:
-			SetTimer(hWnd, TMR_1, 20, 0);
-			logs.seekg(0);
+			if (logs.size() != 0)
+				SetTimer(hWnd, TMR_ANIMATION, 20, 0);
 			break;
 		case ID_CREATE_BALLS:
+		{
 			SetTimer(hWnd, TMR_BALLS, 20, 0);
-			ball.init(500, 500);
+			object b(700, 300, rand()%10 , FALSE);
+			ball.push_back(b);
 			break;
+		}
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
-
+		SetFocus(hWnd);
+		SetActiveWindow(hWnd);
 		break;
 	case WM_KEYDOWN:
-//	case WM_KEYUP:
+
 		wmId = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
 		switch (wmId)
@@ -344,61 +390,86 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			beta = beta - one_degree;			
 			break;
 		case VK_SPACE:
-			system("pause");
+			for (int i = 0; i < ball.size(); i++) 
+			{
+				if (!ball[i].get_egs())
+				{
+					if (ball[i].catch_ball(end_pos))
+					//KillTimer(hWnd, TMR_BALLS);
+					ball[i].set_egs(true);
+					
+				}
+				else 
+				{
+					ball[i].set_egs(false);
+					SetTimer(hWnd, TMR_BALLS, 20, 0);
+					ball[i].stop();
+				}
+			}
+			
+			
 			break;
 		case VK_RETURN:
-			logs << alpha << " " << beta << std::endl;
-
+			logs.push_back(alpha);
+			logs.push_back(beta);
 		}
 
-		if (alpha > 2 * pi)alpha = alpha - 2 * pi;
+		if  (alpha > 2 * pi)alpha = alpha - 2 * pi;
 		if (beta > 2 * pi)beta = beta - 2 * pi;
-
-		hdc = BeginPaint(hWnd, &ps);
-		draw_arm(hdc, alpha, beta);
+		if (alpha < -2*pi)alpha = alpha + 2 * pi;
+		if (beta < -2*pi)beta = beta + 2 * pi;
 
 		InvalidateRect(hWnd, &robot, TRUE);
-		EndPaint(hWnd, &ps);
+
 		break;
 	case WM_PAINT:
-
 		hdc = BeginPaint(hWnd, &ps);
-		draw_arm(hdc, alpha, beta);
+		MoveToEx(hdc, robot.left, robot.top, 0);
+		LineTo(hdc, robot.left, 524);
+		LineTo(hdc, robot.right, 524);
+		LineTo(hdc, robot.right, robot.top);
+		LineTo(hdc, robot.left, robot.top);
+		end_pos = draw_arm(hdc, alpha, beta);
+		for (int i = 0; i < ball.size(); i++)
+		{
+			Show_mass(hdc, ball[i].get_mass(),i);
+			ball[i].draw_object(hdc);
+			
+			if (ball[i].get_egs())ball[i].catch_ball(end_pos);
+		}
 		EndPaint(hWnd, &ps);
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
-
 	case WM_TIMER:
 		hdc = BeginPaint(hWnd, &ps);
 		switch (wParam)
 		{
-		case TMR_1:
-			
-			int al=0, bet=0;
-			
-			if(!animate(hdc, al, bet))
-			{
-				logs >> al >> bet;
-			
-			
-			}
+		case TMR_ANIMATION:
+			if (!animate(hdc, logs[anim], logs[anim + 1]))
+				anim = anim + 2;
 			InvalidateRect(hWnd, &robot, TRUE);
-			if (logs.eof()) 
+			
+			if (anim >= logs.size())
 			{
-				KillTimer(hWnd, TMR_1);
+				KillTimer(hWnd, TMR_ANIMATION);
+				anim = 0;
 			}
 			break;
+		case TMR_BALLS:
+			//ball.draw_object(hdc);
+			InvalidateRect(hWnd, &robot, TRUE);
+
+			for(int i=0;i<ball.size();i++)ball[i].freefall();
+			break;
 		}
-	case TMR_BALLS:
-		ball.draw_object(hdc, 100, 200);
-		InvalidateRect(hWnd, &robot, TRUE);
+		EndPaint(hWnd, &ps);
 		break;
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
-	EndPaint(hWnd, &ps);
+	
 	return 0;
 }
 

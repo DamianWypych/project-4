@@ -27,7 +27,7 @@
 #define ID_CREATE_BALLS			222
 
 #define MAX_LOADSTRING			100
-#define TMR_1					1
+#define TMR_ANIMATION					1
 #define TMR_BALLS				234
 // Next default values for new objects
 //
